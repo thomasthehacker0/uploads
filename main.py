@@ -1,48 +1,35 @@
-from transformers import GPT2Tokenizer, GPT2LMHeadModel, TextDataset, DataCollatorForLanguageModeling
-from transformers import Trainer, TrainingArguments
+from transformers import AutoTokenizer
+tokenizer = AutoTokenizer.from_pretrained('gpt2')
+tokenized_dataset = tokenizer(dataset['input'], padding=True, truncation=True)
+from torch.utils.data import Dataset
+class ConversationDataset(Dataset):
+    def __init__(self, encodings):
+        self.encodings = encodings
 
+    def __getitem__(self, idx):
+        return {key: torch.tensor(val[idx]) for key, val in self.encodings.items()}
 
-with open('your_filed.txt', 'r') as file:
-    contentss = file.read()
-
-# Load the tokenizer
-tokenizer = GPT2Tokenizer.from_pretrained('gpt2')
-
-# Tokenize the text
-inputs = tokenizer(contentss, return_tensors='pt', truncation=True, max_length=512)
-
-# Create a dataset
-dataset = TextDataset(
-    tokenizer=tokenizer,
-    file_path="your_filed.txt",
-    block_size=128
-)
-
-# Create a data collator
-data_collator = DataCollatorForLanguageModeling(
-    tokenizer=tokenizer, mlm=False,
-)
-
-# Load the model
+    def __len__(self):
+        return len(self.encodings.input_ids)
+from transformers import TextGenerationPipeline, GPT2LMHeadModel
 model = GPT2LMHeadModel.from_pretrained('gpt2')
-
-# Set up the training arguments
+pipeline = TextGenerationPipeline(model=model)
+from transformers import Trainer, TrainingArguments
 training_args = TrainingArguments(
-    output_dir="./output",
-    overwrite_output_dir=True,
-    num_train_epochs=1,
-    per_device_train_batch_size=1,
-    save_steps=10_000,
-    save_total_limit=2,
+    output_dir='./results',          # output directory
+    num_train_epochs=3,              # total number of training epochs
+    per_device_train_batch_size=16, # batch size per device during training
+    per_device_eval_batch_size=64,   # batch size for evaluation
+    warmup_steps=500,                # number of warmup steps for learning rate scheduler
+    weight_decay=0.01,               # strength of weight decay
+    logging_dir='./logs',            # directory for storing logs
 )
 
-# Create the trainer
 trainer = Trainer(
-    model=model,
-    args=training_args,
-    data_collator=data_collator,
-    train_dataset=dataset,
+    model=model,                         # the instantiated 🤗 Transformers model to be trained
+    args=training_args,                 # training arguments, defined above
+    train_dataset=train_dataset,         # training dataset
+    eval_dataset=test_dataset            # evaluation dataset
 )
 
-# Train the model
 trainer.train()
